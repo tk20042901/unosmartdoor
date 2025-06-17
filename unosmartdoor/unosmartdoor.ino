@@ -5,12 +5,12 @@
 #include <Keypad.h>
 #include <ESP32Servo.h>
 
-// lcd 1602
+//lcd 1602
 #define SDA_PIN 22
 #define SCL_PIN 23
 LCD lcd(SDA_PIN, SCL_PIN);
 
-// keypad
+//keypad
 char keys[4][3] = {
   { '1', '2', '3' },
   { '4', '5', '6' },
@@ -28,23 +28,25 @@ byte rowPins[4] = { KEYPAD_R1_PIN, KEYPAD_R2_PIN, KEYPAD_R3_PIN, KEYPAD_R4_PIN }
 byte colPins[3] = { KEYPAD_C1_PIN, KEYPAD_C2_PIN, KEYPAD_C3_PIN };
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, 4, 3);
 
-// servo
+//servo
 #define SERVO_PIN 15
 Servo servo;
 
-// ultrasonic distance sensor
+//ultrasonic distance sensor
 #define TRIG_PIN 2
 #define ECHO_PIN 4
 Ultrasonic ultrasonic(TRIG_PIN, ECHO_PIN);
 
-// buzzer
+//buzzer
 #define BUZZER_PIN 5
 Buzzer buzzer(BUZZER_PIN);
-// fingerprint
+
+//fingerprint
 #define F_IN_PIN 33
 #define F_OUT_PIN 32
 Fingerprint finger(F_IN_PIN, F_OUT_PIN);
-// states
+
+//states
 #define LOCK_STATE 1
 #define UNLOCK_STATE 2
 #define ADD_FINGERPRINT_STATE 3
@@ -52,22 +54,22 @@ Fingerprint finger(F_IN_PIN, F_OUT_PIN);
 #define WAIT_STATE 5
 #define SOS_STATE 6
 byte oldState = LOCK_STATE;
-byte state = LOCK_STATE;  // default state
+byte state = LOCK_STATE;  //default state
 
-// timeout in special state (seconds)
+//timeout in special state (seconds)
 #define UNLOCK_TIMEOUT 10
 #define CHANGE_PASSWORD_TIMEOUT 5
 #define WAIT_TIMEOUT 5
-#define MAX_ATTEMPT_FINGER 3
-#define MAX_TIME_FINGERPRINT 20000
+#define FINGERPRINT_TIMEOUT 20
 unsigned long timeOutTimer;
 
-// password
-String password = "0000";  // default password
+//lock state
+String password = "0000";  //default password
 String inputPassword;
-byte limitWrongTime = 3;
-byte fpAttempt = 0;
-byte wrongPasswordTime;
+byte fingerprintAttempt = 0;
+byte passwordAttempt = 0;
+#define MAX_ATTEMPT_PASSWORD 3
+#define MAX_ATTEMPT_FINGER 3
 String inputChangePassword = "";
 const String code = "****";
 
@@ -80,17 +82,16 @@ void setup() {
   finger.begin();
   while (!finger.verifyPassword()) {
     buzzer.failure();
-    lcd.display("fing error");
+    lcd.display("Can't connect", "to fingerprint");
   }
-  passwordState();  // default state
+  passwordState();  //default state
 }
 
 void loop() {
-  // change display if state changed
-
+  //change display if state changed
   handleStateChange();
 
-  // check timeout in special state
+  //check timeout in special state
   checkTimeOut();
 
   readFingerInput();
@@ -107,36 +108,36 @@ void readFingerInput() {
 }
 
 void handleLockStateFingerprint() {
-  if (fpAttempt >= MAX_ATTEMPT_FINGER) {
-    buzzer.failure();
-    lcd.display("You can not use fingerprint", "", 1);
-    return;
-  }
 
   uint8_t p = finger.getFingerprintIDez();
 
-  if (p == FINGERPRINT_OK) {
-    buzzer.success();
-    lcd.display("Correct password", "Welcome back", 2);
-    state = UNLOCK_STATE;
-  } else if (p != FINGERPRINT_NOFINGER) {
-    fpAttempt++;
+  if (p != FINGERPRINT_NOFINGER && fingerprintAttempt >= MAX_ATTEMPT_FINGER) {  //if has fingerprint but fingerprint wrong too many times
     buzzer.failure();
-    lcd.display("Wrong finger", "Attempt: " + String(fpAttempt), 1);
-
-    if (fpAttempt >= MAX_ATTEMPT_FINGER) {
-      lcd.display("Fingerprint", "has been locked", 1);
-    }
+    lcd.display("Fingerprint", "has been locked", 1);
+    return;
   }
 
-  delay(100);
+  if (p == FINGERPRINT_OK) {  //valid finger
+    buzzer.success();
+    lcd.display("Valid finger", "Welcome back", 1);
+    state = UNLOCK_STATE;
+  } else if (p != FINGERPRINT_NOFINGER) {  //wrong finger
+    fingerprintAttempt++;
+    buzzer.failure();
+    if (fingerprintAttempt >= MAX_ATTEMPT_FINGER) {  //when fingerprint wrong too many times
+      lcd.display("Wrong finger", "too many times", 1);
+      lcd.display("Fingerprint", "has been locked", 1);
+      return;
+    }
+    lcd.display("Wrong finger", 1);
+  }
 }
+
 void handleAddFingerprintState() {
   if (!finger.hadFirstImage()) {
     if (finger.getFirstImage() == FINGERPRINT_OK) {
       buzzer.success();
-      lcd.display("1st success", "Remove finger", 2);
-      delay(2000);
+      lcd.display("1st success", "Remove finger", 4);
       lcd.display("Put finger", "again");
     }
   } else {
@@ -151,7 +152,6 @@ void handleAddFingerprintState() {
     }
   }
 }
-
 
 void handleStateChange() {
   if (oldState != state) {
@@ -181,7 +181,7 @@ void handleStateChange() {
 
 void checkTimeOut() {
   if (state == UNLOCK_STATE) {
-    if (ultrasonic.checkObstacle()) {  // check for obstacle in front of door
+    if (ultrasonic.checkObstacle()) {  //check for obstacle in front of door
       setTimeOut(UNLOCK_TIMEOUT);
     } else if (timeOutTimer < millis()) {
       buzzer.beep();
@@ -201,23 +201,23 @@ void readKeypadInput() {
     buzzer.beep();
     switch (state) {
       case LOCK_STATE:
-        runPassword(c);
+        keypadInputPassword(c);
         break;
       case UNLOCK_STATE:
-        whenunlock(c);
+        keypadInputUnlock(c);
         break;
       case ADD_FINGERPRINT_STATE:
-        runAddFingerprint(c);
+        keypadInputAddFingerprint(c);
         break;
       case CHANGE_PASSWORD_STATE:
-        changePassword(c);
+        keypadInputChangePassword(c);
         break;
     }
   }
 }
 
 void passwordState() {
-  // turn servo
+  //turn servo
   servo.write(180);
   inputPassword = "";
   displayInputPassword();
@@ -226,8 +226,8 @@ void passwordState() {
 void unlockState() {
   servo.write(90);
   setTimeOut(UNLOCK_TIMEOUT);
-  wrongPasswordTime = 0;
-  fpAttempt = 0;
+  passwordAttempt = 0;
+  fingerprintAttempt = 0;
   lcd.display("(*)+ Fingerprint", "(#)Change pass");
 }
 
@@ -248,10 +248,11 @@ void waitState() {
   state = LOCK_STATE;
 }
 void addFingerprintState() {
-  setTimeOut(MAX_TIME_FINGERPRINT);
+  setTimeOut(FINGERPRINT_TIMEOUT);
   buzzer.beep();
   lcd.display("Put your finger");
 }
+
 void SOS_State() {
   lcd.display("Khong lam ma doi", "co an thi an ...");
   while (true) {
@@ -263,7 +264,7 @@ void setTimeOut(byte time) {
   timeOutTimer = millis() + time * 1000;
 }
 
-void whenunlock(char c) {
+void keypadInputUnlock(char c) {
   if (c == '*') {
     state = ADD_FINGERPRINT_STATE;
   }
@@ -272,31 +273,31 @@ void whenunlock(char c) {
   }
 }
 
-void runPassword(char c) {
-  if (c == '#') {  // backspace
+void keypadInputPassword(char c) {
+  if (c == '#') {  //backspace
     inputPassword = inputPassword.substring(0, inputPassword.length() - 1);
-  } else if (isDigit(c)) {  // only input number
+  } else if (isDigit(c)) {  //only input number
     inputPassword += c;
   }
-  if (inputPassword.length() == 4) {       // after input 4 digit, check correct immediately
-    if (inputPassword.equals(password)) {  // correct
+  if (inputPassword.length() == 4) {       //after input 4 digit, check correct immediately
+    if (inputPassword.equals(password)) {  //correct
       buzzer.success();
       lcd.display("Correct password", "Welcome back", 1);
       state = UNLOCK_STATE;
       return;
-    } else {  // wrong
+    } else {  //wrong
       buzzer.failure();
-      wrongPasswordTime++;
-      if (wrongPasswordTime == limitWrongTime) {  // when password wrong many times
+      passwordAttempt++;
+      if (passwordAttempt == MAX_ATTEMPT_PASSWORD) {  //when password wrong too many times
         state = WAIT_STATE;
         return;
       }
-      if (wrongPasswordTime > limitWrongTime) {  // when password wrong after wait state
+      if (passwordAttempt > MAX_ATTEMPT_PASSWORD) {  //when password wrong after wait state
         state = SOS_STATE;
         return;
       }
       inputPassword = "";
-      lcd.display("Wrong password", "", 1);
+      lcd.display("Wrong password", 1);
     }
   }
   displayInputPassword();
@@ -306,23 +307,23 @@ void displayInputPassword() {
   lcd.display("Keypad or (*)Fing", code.substring(0, inputPassword.length()));
 }
 
-void changePassword(char c) {
-  if (c == '*') {                             // submit
-    if (inputChangePassword.length() != 4) {  // password must have 4 digit
+void keypadInputChangePassword(char c) {
+  if (c == '*') {                             //submit
+    if (inputChangePassword.length() != 4) {  //password must have 4 digit
       buzzer.failure();
       lcd.display("Password must", "have 4 digit", 1);
-    } else {  // change password successfully
+    } else {  //change password successfully
       buzzer.success();
       password = inputChangePassword;
       lcd.display("Change password", "successfully", 1);
       state = UNLOCK_STATE;
       return;
     }
-  } else if (c == '#') {  // backspace
+  } else if (c == '#') {  //backspace
     inputChangePassword = inputChangePassword.substring(0, inputChangePassword.length() - 1);
-  } else if (inputChangePassword.length() == 4) {  // password must have 4 digit
+  } else if (inputChangePassword.length() == 4) {  //password must have 4 digit
     lcd.display("Too long input", "", 1);
-  } else if (isDigit(c)) {
+  } else {
     inputChangePassword += c;
   }
   displayInputChangePassword();
@@ -333,8 +334,8 @@ void displayInputChangePassword() {
   lcd.display("Enter new", "password:" + code.substring(0, inputChangePassword.length()));
 }
 
-void runAddFingerprint(char c) {
-  if (c == '#') {  // cancel
+void keypadInputAddFingerprint(char c) {
+  if (c == '#') {  //cancel
     state = UNLOCK_STATE;
   }
 }

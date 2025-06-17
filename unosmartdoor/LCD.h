@@ -7,10 +7,10 @@ private:
 
 public:
   LCD(byte SDA_pin, byte SCL_pin)
-    : lcd(13,12,14,27,26,25), SDA_pin(SDA_pin), SCL_pin(SCL_pin){};
+    : lcd(13, 12, 14, 27, 26, 25), SDA_pin(SDA_pin), SCL_pin(SCL_pin){};
 
   void begin() {
-    lcd.begin(16,2);
+    lcd.begin(16, 2);
   }
 
   void clear() {
@@ -39,6 +39,12 @@ public:
     lcd.print(row1);
     lcd.setCursor(0, 1);
     lcd.print(row2);
+  }
+
+   void display(String row1, byte delayTime) {
+    lcd.clear();
+    lcd.print(row1);
+    delay(delayTime * 1000);
   }
 
   void display(String row1, String row2, byte delayTime) {
