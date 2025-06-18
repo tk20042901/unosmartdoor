@@ -11,7 +11,7 @@ public:
   }
 
   void beep() {
-    tone(buzzerPin, 1500, 100);  // Sharper and clearer beep
+    tone(buzzerPin, 1500, 100);
     delay(120);
     noTone(buzzerPin);
   }
