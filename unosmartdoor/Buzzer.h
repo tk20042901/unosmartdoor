@@ -17,8 +17,6 @@ public:
   }
 
   void sos() {
-    // SOS in Morse: ... --- ...
-    // Short = 200ms, Long = 600ms
     int shortTone = 200;
     int longTone = 600;
     int pause = 150;
