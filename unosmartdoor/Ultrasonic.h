@@ -21,6 +21,6 @@ public:
     delayMicroseconds(10);
     digitalWrite(trigPin, LOW);
     long distance = 0.01723 * pulseIn(echoPin, HIGH);
-    return distance < 169;
+    return distance < 136;
   }
 };
