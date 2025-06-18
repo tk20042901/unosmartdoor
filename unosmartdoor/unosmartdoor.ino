@@ -113,7 +113,8 @@ void handleLockStateFingerprint() {
 
   if (p != FINGERPRINT_NOFINGER && fingerprintAttempt >= MAX_ATTEMPT_FINGER) {  //if has fingerprint but fingerprint wrong too many times
     buzzer.failure();
-    lcd.display("Fingerprint", "has been locked", 1);
+    lcd.display("Fingerprint", "has been locked", 1);  
+    displayInputPassword();
     return;
   }
 
@@ -125,12 +126,12 @@ void handleLockStateFingerprint() {
   } else if (p != FINGERPRINT_NOFINGER) {  //wrong finger
     fingerprintAttempt++;
     buzzer.failure();
+    lcd.display("Wrong finger", 1);
     if (fingerprintAttempt >= MAX_ATTEMPT_FINGER) {  //when fingerprint wrong too many times
       lcd.display("Wrong finger", "too many times", 1);
       lcd.display("Fingerprint", "has been locked", 1);
-      return;
     }
-    lcd.display("Wrong finger", 1);
+    displayInputPassword();
   }
 }
 
@@ -138,8 +139,8 @@ void handleAddFingerprintState() {
   if (!finger.hadFirstImage()) {
     if (finger.getFirstImage() == FINGERPRINT_OK) {
       buzzer.success();
-      lcd.display("1st success", "Remove finger", 4);
-      lcd.display("Put finger", "again");
+      lcd.display("1st success", "Remove finger", 1);
+      lcd.display("Put finger", "again", 1);
     }
   } else {
     uint8_t p = finger.addFinger();
