@@ -59,7 +59,7 @@ byte state = LOCK_STATE;  //default state
 //timeout in special state (seconds)
 #define UNLOCK_TIMEOUT 10
 #define CHANGE_PASSWORD_TIMEOUT 5
-#define WAIT_TIMEOUT 5
+#define WAIT_TIMEOUT 15
 #define FINGERPRINT_TIMEOUT 20
 unsigned long timeOutTimer;
 
