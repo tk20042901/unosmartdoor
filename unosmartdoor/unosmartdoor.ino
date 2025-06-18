@@ -121,6 +121,7 @@ void handleLockStateFingerprint() {
     buzzer.success();
     lcd.display("Valid finger", "Welcome back", 1);
     state = UNLOCK_STATE;
+    return;
   } else if (p != FINGERPRINT_NOFINGER) {  //wrong finger
     fingerprintAttempt++;
     buzzer.failure();
@@ -146,6 +147,7 @@ void handleAddFingerprintState() {
       buzzer.success();
       lcd.display("Add fingerprint success", "", 1);
       state = UNLOCK_STATE;
+      return;
     } else if (p != FINGERPRINT_NOFINGER) {
       buzzer.failure();
       lcd.display("2nd finger not", "equal to 1st", 1);
