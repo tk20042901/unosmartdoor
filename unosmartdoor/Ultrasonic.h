@@ -1,5 +1,3 @@
-#include <Arduino.h>
-
 class Ultrasonic {
 private:
   byte trigPin;
@@ -21,6 +19,6 @@ public:
     delayMicroseconds(10);
     digitalWrite(trigPin, LOW);
     long distance = 0.01723 * pulseIn(echoPin, HIGH);
-    return distance < 136;
+    return distance < 10;
   }
 };
