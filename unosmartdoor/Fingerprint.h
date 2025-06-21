@@ -5,15 +5,15 @@ class Fingerprint {
 private:
   HardwareSerial mySerial;
   Adafruit_Fingerprint finger;
-  byte inPin, outPin;
   boolean firstImageSet = false;
 
 public:
-  Fingerprint(byte inPin, byte outPin)
-    : mySerial(1), finger(&mySerial), inPin(inPin), outPin(outPin) {}
+  Fingerprint()
+    : mySerial(2), finger(&mySerial) {}
 
   void begin() {
-    mySerial.begin(57600, SERIAL_8N1, inPin, outPin);
+    mySerial.begin(57600, SERIAL_8N1, 16, 17);
+    finger.begin(57600);
   }
 
   uint8_t getFingerprintIDez() {
@@ -40,7 +40,8 @@ public:
     return p;
   }
 
-  uint8_t addFinger(uint8_t id = 1) {
+  uint8_t addFinger() {
+
     uint8_t p;
 
     p = finger.getImage();
@@ -49,7 +50,7 @@ public:
     }
 
     p = finger.image2Tz(2);
-    if (p == FINGERPRINT_OK) {
+    if (p != FINGERPRINT_OK) {
       return p;
     }
 
@@ -58,19 +59,33 @@ public:
       return p;
     }
 
-    p = finger.storeModel(id);
+    finger.getTemplateCount();
+    p = finger.storeModel(finger.templateCount + 1);
     if (p != FINGERPRINT_OK) {
       return p;
     }
-    firstImageSet = false;
+    
     return p;
   }
 
   boolean verifyPassword() {
     return finger.verifyPassword();
   }
-  
+
   boolean hadFirstImage() {
     return firstImageSet;
+  }
+
+  void resetHadFirstImage(){
+    firstImageSet = false;
+  }
+
+  boolean isFullData() {
+    finger.getTemplateCount();
+    return finger.templateCount == 127;
+  }
+
+  void emptyDatabase() {
+    finger.emptyDatabase();
   }
 };

@@ -1,16 +1,16 @@
-#include <LiquidCrystal.h>
+#include <LiquidCrystal_I2C.h>
 
 class LCD {
 private:
-  LiquidCrystal lcd;
-  byte SDA_pin, SCL_pin;
+  LiquidCrystal_I2C lcd;
 
 public:
-  LCD(byte SDA_pin, byte SCL_pin)
-    : lcd(13, 12, 14, 27, 26, 25), SDA_pin(SDA_pin), SCL_pin(SCL_pin){};
+  LCD()
+    : lcd(0x27, 16, 2){};
 
   void begin() {
-    lcd.begin(16, 2);
+    lcd.init();
+    lcd.backlight();
   }
 
   void clear() {
@@ -41,7 +41,7 @@ public:
     lcd.print(row2);
   }
 
-   void display(String row1, byte delayTime) {
+  void display(String row1, byte delayTime) {
     lcd.clear();
     lcd.print(row1);
     delay(delayTime * 1000);
