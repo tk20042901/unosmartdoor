@@ -28,15 +28,20 @@ public:
   }
 
   uint8_t getFirstImage() {
+
     uint8_t p = finger.getImage();
+
     if (p != FINGERPRINT_OK) {
       return p;
     }
+
     p = finger.image2Tz(1);
     if (p != FINGERPRINT_OK) {
       return p;
     }
+
     firstImageSet = true;
+    
     return p;
   }
 

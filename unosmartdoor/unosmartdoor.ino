@@ -6,8 +6,8 @@
 #include "Door.h"
 
 //lcd 1602
-//SCL connect to pin 22
-//SDA connect to pin 21
+//SCL connect to pin 22 in ESP32 (SCL pin)
+//SDA connect to pin 21 in ESP32 (SDA pin)
 LCD lcd;
 
 //keypad
@@ -17,13 +17,13 @@ char keys[4][3] = {
   { '7', '8', '9' },
   { '*', '0', '#' }
 };
-#define KEYPAD_R1_PIN 27
-#define KEYPAD_R2_PIN 26
-#define KEYPAD_R3_PIN 25
-#define KEYPAD_R4_PIN 33
-#define KEYPAD_C1_PIN 32
-#define KEYPAD_C2_PIN 18
-#define KEYPAD_C3_PIN 19
+#define KEYPAD_R1_PIN 13
+#define KEYPAD_R2_PIN 12
+#define KEYPAD_R3_PIN 14
+#define KEYPAD_R4_PIN 27
+#define KEYPAD_C1_PIN 26
+#define KEYPAD_C2_PIN 25
+#define KEYPAD_C3_PIN 33
 byte rowPins[4] = { KEYPAD_R1_PIN, KEYPAD_R2_PIN, KEYPAD_R3_PIN, KEYPAD_R4_PIN };
 byte colPins[3] = { KEYPAD_C1_PIN, KEYPAD_C2_PIN, KEYPAD_C3_PIN };
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, 4, 3);
@@ -42,8 +42,8 @@ Ultrasonic ultrasonic(TRIG_PIN, ECHO_PIN);
 Buzzer buzzer(BUZZER_PIN);
 
 //fingerprint
-//TX connect to PIN RX2
-//RX connect to PIN TX2
+//TX connect to pin RX2 in ESP32
+//RX connect to pin TX2 in ESP32
 Fingerprint fingerprint;
 
 //states
@@ -51,8 +51,7 @@ Fingerprint fingerprint;
 #define UNLOCK_STATE 2
 #define ADD_FINGERPRINT_STATE 3
 #define CHANGE_PASSWORD_STATE 4
-#define WAIT_STATE 5
-#define SOS_STATE 6
+#define SOS_STATE 5
 byte oldState = LOCK_STATE;
 byte state = LOCK_STATE;  //default state
 
@@ -60,7 +59,7 @@ byte state = LOCK_STATE;  //default state
 #define UNLOCK_TIMEOUT 5
 #define CHANGE_PASSWORD_TIMEOUT 5
 #define WAIT_TIMEOUT 15
-#define FINGERPRINT_TIMEOUT 10
+#define ADD_FINGERPRINT_TIMEOUT 10
 unsigned long timeOutTimer;
 
 //lock state
@@ -80,48 +79,63 @@ const String code = "****";
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
 
+//wifi info
 char ssid[] = "2910A";
 char pass[] = "0974040555";
 
-#define OPEN_DOOR_VITUAL_PIN V0
-#define REMOVE_ALL_FINGERPRINT V1
-#define STOP_SOS_STATE V2
+//blynk virtual pins
+#define OPEN_DOOR_VIRTUAL_PIN V0
+#define CLEAR_FINGERPRINT_DATABASE_VIRTUAL_PIN V1
+#define STOP_SOS_STATE_VIRTUAL_PIN V2
+#define SHOW_PASSWORD_VIRTUAL_PIN V3
+#define CHANGE_PASSWORD_VIRTUAL_PIN V4
+#define ADD_FINGERPRINT_VIRTUAL_PIN V5
+#define STATE_VIRTUAL_PIN V6
 
-BLYNK_WRITE(OPEN_DOOR_VITUAL_PIN) {
-  int value = param.asInt();
-  if (value == 1) {
+BLYNK_WRITE(OPEN_DOOR_VIRTUAL_PIN) {
+  if (param.asInt()) {
     if (state == LOCK_STATE) {
       buzzer.success();
       lcd.display("Blynk opened", "Welcome back", 1);
       state = UNLOCK_STATE;
-    } else if (state == UNLOCK_STATE) {
-      lcd.display("Already opened", 1);
-      unlockState();
     }
   }
 }
 
-BLYNK_WRITE(REMOVE_ALL_FINGERPRINT) {
-  int value = param.asInt();
-  if (value == 1) {
+BLYNK_WRITE(CLEAR_FINGERPRINT_DATABASE_VIRTUAL_PIN) {
+  if (param.asInt()) {
     fingerprint.emptyDatabase();
     buzzer.success();
-    lcd.display("Removed all", "fingerprint", 1);
-    if (state == LOCK_STATE) {
-      lockState();
-    } else {
+    Blynk.logEvent("notification", "Cleared fingerprint database");
+  }
+}
+
+BLYNK_WRITE(STOP_SOS_STATE_VIRTUAL_PIN) {
+  if (param.asInt()) {
+    if (state == SOS_STATE) {
+      Blynk.logEvent("notification", "SOS stoped");
       state = LOCK_STATE;
     }
   }
 }
 
-BLYNK_WRITE(STOP_SOS_STATE) {
-  int value = param.asInt();
-  if (value == 1) {
-    if (state == SOS_STATE) {
-      lcd.display("SOS stoped", 1);
-      state = LOCK_STATE;
-    }
+BLYNK_WRITE(SHOW_PASSWORD_VIRTUAL_PIN) {
+  if (param.asInt()) {
+    Blynk.logEvent("notification", "Your password is " + password);
+  }
+}
+
+BLYNK_WRITE(CHANGE_PASSWORD_VIRTUAL_PIN) {
+  if (param.asInt()) {
+    if (state != CHANGE_PASSWORD_STATE)
+      state = CHANGE_PASSWORD_STATE;
+  }
+}
+
+BLYNK_WRITE(ADD_FINGERPRINT_VIRTUAL_PIN) {
+  if (param.asInt()) {
+    if (state != ADD_FINGERPRINT_STATE)
+      state = ADD_FINGERPRINT_STATE;
   }
 }
 
@@ -153,19 +167,62 @@ void loop() {
   readKeypadInput();
 }
 
+
+void handleStateChange() {
+  if (oldState != state) {
+    oldState = state;
+    switch (state) {
+      case LOCK_STATE:
+        lockState();
+        break;
+      case UNLOCK_STATE:
+        unlockState();
+        break;
+      case ADD_FINGERPRINT_STATE:
+        addFingerprintState();
+        break;
+      case CHANGE_PASSWORD_STATE:
+        changePasswordState();
+        break;
+      case SOS_STATE:
+        SOS_State();
+        break;
+    }
+  }
+}
+
+void checkTimeOut() {
+  if (state == UNLOCK_STATE) {
+    if (ultrasonic.checkObstacle()) {  //check for obstacle in front of door
+      setTimeOut(UNLOCK_TIMEOUT);
+    } else if (timeOutTimer < millis()) {
+      buzzer.beep();
+      state = LOCK_STATE;
+      return;
+    }
+  }
+  if (state == CHANGE_PASSWORD_STATE || state == ADD_FINGERPRINT_STATE) {
+    if (timeOutTimer < millis()) {
+      buzzer.beep();
+      state = UNLOCK_STATE;
+      return;
+    }
+  }
+}
+
 void readFingerInput() {
   if (state == LOCK_STATE) {
     handleLockStateFingerprint();
   } else if (state == ADD_FINGERPRINT_STATE) {
     if (fingerprint.isFullData()) {
-      lcd.display("Data base", "is full", 1);
-      lcd.display("Can't add new", "fingerprint", 1);
+      Blynk.logEvent("notification", "Can't add new fingerprint because database is full");
       state == UNLOCK_STATE;
     } else {
       handleAddFingerprintState();
     }
   }
 }
+
 
 void handleLockStateFingerprint() {
 
@@ -201,7 +258,7 @@ void handleAddFingerprintState() {
       buzzer.success();
       lcd.display("1st try success", "Remove finger", 1);
       lcd.display("Put finger", "again", 1);
-      setTimeOut(FINGERPRINT_TIMEOUT);
+      setTimeOut(ADD_FINGERPRINT_TIMEOUT);
     }
   } else {
     uint8_t p = fingerprint.addFinger();
@@ -215,51 +272,6 @@ void handleAddFingerprintState() {
       lcd.display("2nd try not", "match 1st", 1);
       fingerprint.resetHadFirstImage();
       state = UNLOCK_STATE;
-    }
-  }
-}
-
-void handleStateChange() {
-  if (oldState != state) {
-    oldState = state;
-    switch (state) {
-      case LOCK_STATE:
-        lockState();
-        break;
-      case UNLOCK_STATE:
-        unlockState();
-        break;
-      case ADD_FINGERPRINT_STATE:
-        addFingerprintState();
-        break;
-      case CHANGE_PASSWORD_STATE:
-        changePasswordState();
-        break;
-      case WAIT_STATE:
-        waitState();
-        break;
-      case SOS_STATE:
-        SOS_State();
-        break;
-    }
-  }
-}
-
-void checkTimeOut() {
-  if (state == UNLOCK_STATE) {
-    if (ultrasonic.checkObstacle()) {  //check for obstacle in front of door
-      setTimeOut(UNLOCK_TIMEOUT);
-    } else if (timeOutTimer < millis()) {
-      buzzer.beep();
-      state = LOCK_STATE;
-      return;
-    }
-  }
-  if (state == CHANGE_PASSWORD_STATE || state == ADD_FINGERPRINT_STATE) {
-    if (timeOutTimer < millis()) {
-      buzzer.beep();
-      state = UNLOCK_STATE;
-      return;
     }
   }
 }
@@ -289,6 +301,7 @@ void lockState() {
   door.lock();
   inputPassword = "";
   displayInputPassword();
+  Blynk.virtualWrite(STATE_VIRTUAL_PIN, "Locking");
 }
 
 void unlockState() {
@@ -297,35 +310,29 @@ void unlockState() {
   passwordAttempt = 0;
   fingerprintAttempt = 0;
   lcd.display("(*)+ Fingerprint", "(#)Change pass");
+  Blynk.virtualWrite(STATE_VIRTUAL_PIN, "Unlocked");
 }
 
 void changePasswordState() {
   inputChangePassword = "";
   displayInputChangePassword();
+  Blynk.virtualWrite(STATE_VIRTUAL_PIN, "Changing password");
 }
 
-void waitState() {
-  lcd.display("Wrong password", "too many times", 1);
-  lcd.display("Try again in ");
-  for (byte timer = WAIT_TIMEOUT; timer > 0; timer--) {
-    lcd.setCursor(0, 1);
-    lcd.print(timer);
-    lcd.print(" seconds   ");
-    delay(1000);
-  }
-  state = LOCK_STATE;
-}
 void addFingerprintState() {
-  setTimeOut(FINGERPRINT_TIMEOUT);
+  setTimeOut(ADD_FINGERPRINT_TIMEOUT);
   buzzer.beep();
   lcd.display("Put your finger");
+  Blynk.virtualWrite(STATE_VIRTUAL_PIN, "Adding fingerprint");
 }
 
 void SOS_State() {
-  lcd.display("Khong lam ma doi", "co an thi an ...");
+  lcd.display("Door is locked");
+  Blynk.logEvent("sos");
+  Blynk.virtualWrite(STATE_VIRTUAL_PIN, "SOS!!!");
   while (state == SOS_STATE) {
     buzzer.sos();
-    Blynk.run();//check stop sos in blynk
+    Blynk.run();  //check stop sos in blynk
   }
 }
 
@@ -358,10 +365,10 @@ void keypadInputPassword(char c) {
       buzzer.failure();
       passwordAttempt++;
       if (passwordAttempt == MAX_ATTEMPT_PASSWORD - 1) {  //when password wrong too many times
-        state = WAIT_STATE;
+        wait();
         return;
       }
-      if (passwordAttempt >= MAX_ATTEMPT_PASSWORD) {  //when password wrong after wait state
+      if (passwordAttempt >= MAX_ATTEMPT_PASSWORD) {  //when password wrong after wait
         state = SOS_STATE;
         return;
       }
@@ -370,6 +377,17 @@ void keypadInputPassword(char c) {
     }
   }
   displayInputPassword();
+}
+
+void wait() {
+  lcd.display("Wrong password", "too many times", 1);
+  lcd.display("Try again in ");
+  for (byte timer = WAIT_TIMEOUT; timer > 0; timer--) {
+    lcd.setCursor(0, 1);
+    lcd.print(timer);
+    lcd.print(" seconds   ");
+    delay(1000);
+  }
 }
 
 void displayInputPassword() {

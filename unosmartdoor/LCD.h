@@ -29,7 +29,7 @@ public:
     lcd.setCursor(col, row);
   }
 
-  void display(const String &s) {
+  void display(String s) {
     lcd.clear();
     lcd.print(s);
   }
