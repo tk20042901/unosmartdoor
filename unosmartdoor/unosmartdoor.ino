@@ -156,7 +156,7 @@ void setup() {
 void loop() {
   Blynk.run();
 
-  //change display if state changed
+  //init new state if state changed
   handleStateChange();
 
   //check timeout in special state
@@ -166,7 +166,6 @@ void loop() {
 
   readKeypadInput();
 }
-
 
 void handleStateChange() {
   if (oldState != state) {
@@ -214,15 +213,9 @@ void readFingerInput() {
   if (state == LOCK_STATE) {
     handleLockStateFingerprint();
   } else if (state == ADD_FINGERPRINT_STATE) {
-    if (fingerprint.isFullData()) {
-      Blynk.logEvent("notification", "Can't add new fingerprint because database is full");
-      state == UNLOCK_STATE;
-    } else {
-      handleAddFingerprintState();
-    }
+    handleAddFingerprintState();
   }
 }
-
 
 void handleLockStateFingerprint() {
 
@@ -284,9 +277,6 @@ void readKeypadInput() {
       case LOCK_STATE:
         keypadInputPassword(c);
         break;
-      case UNLOCK_STATE:
-        keypadInputUnlock(c);
-        break;
       case ADD_FINGERPRINT_STATE:
         keypadInputAddFingerprint(c);
         break;
@@ -309,7 +299,7 @@ void unlockState() {
   setTimeOut(UNLOCK_TIMEOUT);
   passwordAttempt = 0;
   fingerprintAttempt = 0;
-  lcd.display("(*)+ Fingerprint", "(#)Change pass");
+  lcd.display("Welcome back");
   Blynk.virtualWrite(STATE_VIRTUAL_PIN, "Unlocked");
 }
 
@@ -320,6 +310,11 @@ void changePasswordState() {
 }
 
 void addFingerprintState() {
+  if (fingerprint.isFullData()) {
+    Blynk.logEvent("notification", "Can't add new fingerprint because database is full");
+    state == UNLOCK_STATE;
+    return;
+  }
   setTimeOut(ADD_FINGERPRINT_TIMEOUT);
   buzzer.beep();
   lcd.display("Put your finger");
@@ -340,15 +335,6 @@ void setTimeOut(byte time) {
   timeOutTimer = millis() + time * 1000;
 }
 
-void keypadInputUnlock(char c) {
-  if (c == '*') {
-    state = ADD_FINGERPRINT_STATE;
-  }
-  if (c == '#') {
-    state = CHANGE_PASSWORD_STATE;
-  }
-}
-
 void keypadInputPassword(char c) {
   if (c == '#') {  //backspace
     inputPassword = inputPassword.substring(0, inputPassword.length() - 1);
@@ -364,6 +350,7 @@ void keypadInputPassword(char c) {
     } else {  //wrong
       buzzer.failure();
       passwordAttempt++;
+      inputPassword = "";
       if (passwordAttempt == MAX_ATTEMPT_PASSWORD - 1) {  //when password wrong too many times
         wait();
         return;
@@ -372,7 +359,6 @@ void keypadInputPassword(char c) {
         state = SOS_STATE;
         return;
       }
-      inputPassword = "";
       lcd.display("Wrong password", 1);
     }
   }
@@ -388,6 +374,7 @@ void wait() {
     lcd.print(" seconds   ");
     delay(1000);
   }
+  displayInputPassword();
 }
 
 void displayInputPassword() {
