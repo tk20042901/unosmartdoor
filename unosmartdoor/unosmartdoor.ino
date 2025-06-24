@@ -29,7 +29,7 @@ byte colPins[3] = { KEYPAD_C1_PIN, KEYPAD_C2_PIN, KEYPAD_C3_PIN };
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, 4, 3);
 
 //door
-#define DOOR_PIN 13
+#define DOOR_PIN 15
 Door door(DOOR_PIN);
 
 //ultrasonic distance sensor
@@ -80,8 +80,8 @@ const String code = "****";
 #include <BlynkSimpleEsp32.h>
 
 //wifi info
-char ssid[] = "2910A";
-char pass[] = "0974040555";
+char ssid[] = "loser 2VN";
+char pass[] = "hetmangroi";
 
 //blynk virtual pins
 #define OPEN_DOOR_VIRTUAL_PIN V0
