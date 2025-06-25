@@ -1,3 +1,8 @@
+#define BLYNK_TEMPLATE_ID "TMPL6vTL9tN0m"
+#define BLYNK_TEMPLATE_NAME "Smart Door"
+#define BLYNK_AUTH_TOKEN "GdD3gW1OxFmiT9WUxELT5yF5iXM3HYQo"
+#include <WiFi.h>
+#include <BlynkSimpleEsp32.h>
 #include "LCD.h"
 #include "Ultrasonic.h"
 #include "Buzzer.h"
@@ -29,7 +34,7 @@ byte colPins[3] = { KEYPAD_C1_PIN, KEYPAD_C2_PIN, KEYPAD_C3_PIN };
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, 4, 3);
 
 //door
-#define DOOR_PIN 13
+#define DOOR_PIN 32
 Door door(DOOR_PIN);
 
 //ultrasonic distance sensor
@@ -72,16 +77,11 @@ byte passwordAttempt = 0;
 String inputChangePassword = "";
 const String code = "****";
 
-//blynk
-#define BLYNK_TEMPLATE_ID "TMPL6vTL9tN0m"
-#define BLYNK_TEMPLATE_NAME "Smart Door"
-#define BLYNK_AUTH_TOKEN "GdD3gW1OxFmiT9WUxELT5yF5iXM3HYQo"
-#include <WiFi.h>
-#include <BlynkSimpleEsp32.h>
+
 
 //wifi info
-char ssid[] = "2910A";
-char pass[] = "0974040555";
+char ssid[] = "THANH BINH";
+char pass[] = "29012004";
 
 //blynk virtual pins
 #define OPEN_DOOR_VIRTUAL_PIN V0
@@ -161,6 +161,8 @@ void loop() {
 
   setTimeOutForState();
 
+  sendTimeOutBlynk();
+
   updateTimeOutWhenObstacle();
 
   checkTimeOut();
@@ -191,9 +193,36 @@ void handleStateChange() {
 }
 void updateTimeOutWhenObstacle() {
   if (state == UNLOCK_STATE && ultrasonic.checkObstacle()) {
-    setTimeOut(UNLOCK_STATE);
+    setTimeOut(UNLOCK_TIMEOUT);
   }
 }
+
+void sendTimeOutBlynk() {
+  long timeLeft = (expirationTime - millis()) / 1000;
+  if (timeLeft < 0) {
+    timeLeft = 0;
+  }
+
+  String message;
+
+  switch (state) {
+    case UNLOCK_STATE:
+      message = "Unlock on " + String(timeLeft) + "s";
+      break;
+    case ADD_FINGERPRINT_STATE:
+      message = "Add finger on " + String(timeLeft) + "s";
+      break;
+    case CHANGE_PASSWORD_STATE:
+      message = "Change pass on " + String(timeLeft) + "s";
+      break;
+    default:
+      return;
+  }
+
+  Blynk.virtualWrite(STATE_VIRTUAL_PIN, message);
+}
+
+
 void setTimeOutForState() {
   if (oldState == state)
     return;
@@ -280,7 +309,6 @@ void checkFingerprint() {
     displayPassword();
   }
 }
-
 void addFingerprint() {
   if (!fingerprint.hadFirstImage()) {
     if (fingerprint.getFirstImage() == FINGERPRINT_OK) {
@@ -316,7 +344,7 @@ void unlockState() {
   passwordAttempt = 0;
   fingerprintAttempt = 0;
   lcd.display("Welcome back");
-  Blynk.virtualWrite(STATE_VIRTUAL_PIN, "Unlock");
+  Blynk.virtualWrite(STATE_VIRTUAL_PIN, "Unlock" + String(UNLOCK_TIMEOUT));
 }
 
 void SOS_State() {
@@ -326,6 +354,7 @@ void SOS_State() {
   while (state == SOS_STATE) {
     buzzer.sos();
     Blynk.run();  //check stop sos in blynk
+    delay(10);
   }
 }
 void changePasswordState() {
@@ -348,17 +377,13 @@ void addFingerprintState() {
 }
 
 void keypadInputPassword(char c) {
-  if (c == '#') {
-    if (inputPassword.length() > 0) {
-      inputPassword.remove(inputPassword.length() - 1);
-    }
-  } else if (isDigit(c)) {
-    if (inputPassword.length() < 4) {
-      inputPassword += c;
-    }
+  if (c == '#' && inputPassword.length() > 0) {
+    inputPassword.remove(inputPassword.length() - 1);
+  } else if (isDigit(c) && inputPassword.length() < 4) {
+    inputPassword += c;
   }
 
-  displayInputPassword();
+  displayPassword();
 
   if (inputPassword.length() == 4) {
     checkPassword();
@@ -434,5 +459,6 @@ void displayPassword() {
   }
 }
 void setTimeOut(unsigned long second) {
-  timeOutDeadline = millis() + second * 1000;
+  expirationTime = millis() + second * 1000;
 }
+
