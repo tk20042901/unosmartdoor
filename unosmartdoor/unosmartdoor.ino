@@ -366,7 +366,7 @@ void changePasswordState() {
 void addFingerprintState() {
   if (fingerprint.isFullData()) {
     Blynk.logEvent("notification", "Can't add new fingerprint because database is full");
-    state == UNLOCK_STATE;
+    state = UNLOCK_STATE;
     return;
   }
   buzzer.beep();
