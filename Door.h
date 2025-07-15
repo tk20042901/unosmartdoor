@@ -18,6 +18,6 @@ public:
   }
 
   void unlock(){
-    servo.write(180);
+    servo.write(150);
   }
 };
